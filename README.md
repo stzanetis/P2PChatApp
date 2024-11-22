@@ -14,8 +14,6 @@ Please consider installing and using the following applications and tools for th
 
 - Git: [link](https://git-scm.com/downloads)
 - Java 23 (although it is expected to work with any version from 1.8 and beyond): [link](https://www.oracle.com/java/technologies/downloads/)
-- Eclipse IDE for Enterprise Java and Web Developers: [link](https://www.eclipse.org/downloads/packages/)
-- Apache Maven: [link](https://maven.apache.org/download.cgi)
 
 
 ## Useful Material
