@@ -52,7 +52,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 		JScrollPane scrollPane = new JScrollPane(textArea);
 		scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
 		
-		//Setting up the buttons
+		// Setting up the buttons
 		sendButton = new JButton("Send");
 		callButton = new JButton("Call");
 						
@@ -65,6 +65,9 @@ public class App extends Frame implements WindowListener, ActionListener {
 		// 3. Linking the buttons to the ActionListener
 		sendButton.addActionListener(this);
 		callButton.addActionListener(this);
+
+		// Make the window non-resizable
+        setResizable(false);
 	}
 	
 	// The main method of the application. It continuously listens for new messages.
