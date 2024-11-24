@@ -23,8 +23,9 @@ public class App extends Frame implements WindowListener, ActionListener {
 	static JTextArea textArea;				 
 	static JFrame frame;					
 	static JButton sendButton;				
-	static JTextField meesageTextField;		  
-	public static Color gray;				
+	static JTextField meesageTextField;
+	public static Color dark_gray;
+	public static Color light_gray;			
 	final static String newline="\n";		
 	static JButton callButton;
 	
@@ -32,16 +33,18 @@ public class App extends Frame implements WindowListener, ActionListener {
 	
 	// Construct the app's frame and initialize important parameters
 	public App(String title) {
-		
 		// 1. Defining the components of the GUI
+
 		// Setting up the characteristics of the frame
 		super(title);
-		gray = new Color(226, 191, 228);
-		setBackground(gray);
+		dark_gray = new Color(26, 26, 26);
+		light_gray = new Color(211, 211, 211);
+		setBackground(dark_gray);
 		setLayout(new FlowLayout());
 		addWindowListener(this);
+		setResizable(false);
 		
-		// Setting up the TextField and the TextArea
+		// Setting up the TextField
 		inputTextField = new TextField();
 		inputTextField.setColumns(31);
 		
@@ -49,6 +52,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 		textArea = new JTextArea(34,40);
 		textArea.setLineWrap(true);
 		textArea.setEditable(false);
+		textArea.setBackground(light_gray);
 		JScrollPane scrollPane = new JScrollPane(textArea);
 		scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
 		
@@ -65,14 +69,10 @@ public class App extends Frame implements WindowListener, ActionListener {
 		// 3. Linking the buttons to the ActionListener
 		sendButton.addActionListener(this);
 		callButton.addActionListener(this);
-
-		// Make the window non-resizable
-        setResizable(false);
 	}
 	
 	// The main method of the application. It continuously listens for new messages.
 	public static void main(String[] args){
-	
 		// 1. Create the app's window
 		App app = new App("Voice and Chat App by Tzanetis Savvas and Zoidis Vasilis");																		  
 		app.setSize(425,640);				  
@@ -80,7 +80,17 @@ public class App extends Frame implements WindowListener, ActionListener {
 
 		// 2. 
 		do{		
-			// TODO: Your code goes here...
+			try {
+				DatagramSocket socket = new DatagramSocket(12345); // Replace with the port number you want to use
+				byte[] buffer = new byte[1024];
+				DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+				socket.receive(packet);
+				String message = new String(buffer, 0, packet.getLength());
+				textArea.append("Stranger: " + message + newline);
+				socket.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}while(true);
 	}
 	
@@ -91,12 +101,25 @@ public class App extends Frame implements WindowListener, ActionListener {
 		// Check which button was clicked.
 		if (e.getSource() == sendButton){	
 			String message = inputTextField.getText();
-
-			// If the message is not empty, append it to the textArea and clear the inputTextField.
 			if (!message.trim().isEmpty()) {
-				textArea.append("Me: " + message + newline);
-				inputTextField.setText("");
-			} 
+				try {
+					DatagramSocket socket = new DatagramSocket();
+					InetAddress address = InetAddress.getByName("172.21.208.1"); // Replace with the target IP address
+					int port = 12345; // Replace with the target port number
+					byte[] buffer = message.getBytes();
+					DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, port);
+
+					// Print the message locally
+					textArea.append("Me: " + message + newline);
+					inputTextField.setText("");
+
+					//Send the message to the target
+					socket.send(packet);
+					socket.close();
+				} catch (IOException ex) {
+					ex.printStackTrace();
+				}
+			}
 		}else if(e.getSource() == callButton){
 			// The "Call" button was clicked	
 			// TODO: Your code goes here...
