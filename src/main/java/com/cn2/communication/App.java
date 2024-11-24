@@ -83,7 +83,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 			new Thread(() -> {
 				while (true) {
 					try {
-						DatagramSocket socket = new DatagramSocket(12345); // Replace with the port number you want to use
+						DatagramSocket socket = new DatagramSocket(8080); // Replace with the port number you want to use
 						byte[] buffer = new byte[1024];
 						DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 						socket.receive(packet);
@@ -108,8 +108,8 @@ public class App extends Frame implements WindowListener, ActionListener {
 			if (!message.trim().isEmpty()) {
 				try {
 					DatagramSocket socket = new DatagramSocket();
-					InetAddress address = InetAddress.getByName("172.21.208.1"); // Replace with the target IP address
-					int port = 12345; // Replace with the target port number
+					InetAddress address = InetAddress.getByName("192.168.2.9"); // Replace with the target IP address
+					int port = 8080; // Replace with the target port number
 					byte[] buffer = message.getBytes();
 					DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, port);
 
