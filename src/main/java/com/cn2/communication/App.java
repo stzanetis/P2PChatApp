@@ -10,11 +10,8 @@ import javax.swing.JTextArea;
 import javax.swing.JScrollPane;
 import javax.swing.JOptionPane;
 
-import java.awt.event.ActionListener;
-import java.awt.event.ActionEvent;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.Color;
 import java.lang.Thread;
 
 public class App extends Frame implements WindowListener, ActionListener {
@@ -77,6 +74,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 	public static void main(String[] args){
 		destIp = JOptionPane.showInputDialog(null, "Enter the IP address to send messages to:", "Destination IP", JOptionPane.QUESTION_MESSAGE);
 		destPort = JOptionPane.showInputDialog(null, "Enter the port number to send messages to:", "Destination Port", JOptionPane.QUESTION_MESSAGE);
+		int port = Integer.parseInt(destPort);
 
 		// 1. Create the app's window
 		App app = new App("Voice and Chat App by Tzanetis Savvas and Zoidis Vasilis");																		  
@@ -84,27 +82,28 @@ public class App extends Frame implements WindowListener, ActionListener {
 		app.setVisible(true);
 
 		// Shows the message destination IP address
-		textArea.append("Sending to " + destIp + "on port " + destPort + newline);
+		textArea.append("Sending to " + destIp + " on port " + destPort + newline);
 		inputTextField.setText("");
 
 		// 2. Listen for new messages
-		do{		
+		try {
+			DatagramSocket socket = new DatagramSocket(port);	
 			new Thread(() -> {
-				while (true) {
-					try {
-						DatagramSocket socket = new DatagramSocket(8080); // Replace with the port number you want to use
-						byte[] buffer = new byte[1024];
+				try {
+					byte[] buffer = new byte[1024];
+					while (true) {
 						DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 						socket.receive(packet);
-						String message = new String(buffer, 0, packet.getLength());
-						textArea.append("Stranger: " + message + newline);
-						socket.close();
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
+						String message = new String(packet.getData(), 0, packet.getLength());
+						textArea.append("Received: " + message + "\n");
+						}
+				} catch (IOException e) {
+					e.printStackTrace();
 				}
 			}).start();
-		}while(true);
+		} catch (SocketException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	// The method that corresponds to the Action Listener. Whenever an action is performed
