@@ -8,6 +8,7 @@ import javax.swing.JTextField;
 import javax.swing.JButton;
 import javax.swing.JTextArea;
 import javax.swing.JScrollPane;
+import javax.swing.JOptionPane;
 
 import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
@@ -29,7 +30,8 @@ public class App extends Frame implements WindowListener, ActionListener {
 	final static String newline="\n";		
 	static JButton callButton;
 	
-	// TODO: Please define and initialize your variables here...
+	public static String destIp;
+	public static String destPort;
 	
 	// Construct the app's frame and initialize important parameters
 	public App(String title) {
@@ -73,12 +75,19 @@ public class App extends Frame implements WindowListener, ActionListener {
 	
 	// The main method of the application. It continuously listens for new messages.
 	public static void main(String[] args){
+		destIp = JOptionPane.showInputDialog(null, "Enter the IP address to send messages to:", "Destination IP", JOptionPane.QUESTION_MESSAGE);
+		destPort = JOptionPane.showInputDialog(null, "Enter the port number to send messages to:", "Destination Port", JOptionPane.QUESTION_MESSAGE);
+
 		// 1. Create the app's window
 		App app = new App("Voice and Chat App by Tzanetis Savvas and Zoidis Vasilis");																		  
 		app.setSize(425,640);				  
-		app.setVisible(true);				  
+		app.setVisible(true);
 
-		// 2. 
+		// Shows the message destination IP address
+		textArea.append("Sending to " + destIp + "on port " + destPort + newline);
+		inputTextField.setText("");
+
+		// 2. Listen for new messages
 		do{		
 			new Thread(() -> {
 				while (true) {
@@ -108,7 +117,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 			if (!message.trim().isEmpty()) {
 				try {
 					DatagramSocket socket = new DatagramSocket();
-					InetAddress address = InetAddress.getByName("192.168.2.9"); // Replace with the target IP address
+					InetAddress address = InetAddress.getByName(destIp); // Replace with the target IP address
 					int port = 8080; // Replace with the target port number
 					byte[] buffer = message.getBytes();
 					DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, port);
