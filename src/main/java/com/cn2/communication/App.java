@@ -80,17 +80,21 @@ public class App extends Frame implements WindowListener, ActionListener {
 
 		// 2. 
 		do{		
-			try {
-				DatagramSocket socket = new DatagramSocket(12345); // Replace with the port number you want to use
-				byte[] buffer = new byte[1024];
-				DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-				socket.receive(packet);
-				String message = new String(buffer, 0, packet.getLength());
-				textArea.append("Stranger: " + message + newline);
-				socket.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+			new Thread(() -> {
+				while (true) {
+					try {
+						DatagramSocket socket = new DatagramSocket(12345); // Replace with the port number you want to use
+						byte[] buffer = new byte[1024];
+						DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+						socket.receive(packet);
+						String message = new String(buffer, 0, packet.getLength());
+						textArea.append("Stranger: " + message + newline);
+						socket.close();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+			}).start();
 		}while(true);
 	}
 	
