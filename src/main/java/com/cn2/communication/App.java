@@ -35,7 +35,8 @@ public class App extends Frame implements WindowListener, ActionListener {
 	static JButton callButton;
 	
 	public static String destIp;
-	public static String destPort;
+	public static String chatPort;
+	public static String voicePort;
 	
 	// Construct the app's frame and initialize important parameters
 	public App(String title) {
@@ -90,16 +91,19 @@ public class App extends Frame implements WindowListener, ActionListener {
 
 		// Ask the user for the destination IP address and port number
 		destIp = JOptionPane.showInputDialog(null, "Enter the IP address to send messages to:", "Destination IP", JOptionPane.QUESTION_MESSAGE);
-		destPort = JOptionPane.showInputDialog(null, "Enter the port number to send messages to:", "Destination Port", JOptionPane.QUESTION_MESSAGE);
-		int port = Integer.parseInt(destPort);
+		chatPort = JOptionPane.showInputDialog(null, "Enter the port number to send messages to:", "Destination Port", JOptionPane.QUESTION_MESSAGE);
+		int chat_port = Integer.parseInt(chatPort);
+		voicePort = JOptionPane.showInputDialog(null, "Enter the port number to send voice data to:", "Voice Port", JOptionPane.QUESTION_MESSAGE);
+		int voice_port = Integer.parseInt(voicePort);
+
 
 		// Shows the message destination IP address
-		textArea.append("Sending to " + destIp + " on port " + destPort + newline);
+		textArea.append("Sending to " + destIp + newline);
 		inputTextField.setText("");
 
-		// 2. Listen for new messages
+		// Create a thread to receive messages
 		try {
-			DatagramSocket socket = new DatagramSocket(port);	
+			DatagramSocket socket = new DatagramSocket(chat_port);	
 			new Thread(() -> {
 				while(true) {
 					try {
@@ -116,6 +120,30 @@ public class App extends Frame implements WindowListener, ActionListener {
 		} catch (SocketException e) {
 			e.printStackTrace();
 		}
+
+		// Create a thread to receive audio data
+		new Thread(() -> {
+			try {
+				// Set up the audio format and line for playback
+				AudioFormat format = new AudioFormat(44100, 16, 2, true, true);
+				DataLine.Info speakerInfo = new DataLine.Info(SourceDataLine.class, format);
+				SourceDataLine speakers = (SourceDataLine) AudioSystem.getLine(speakerInfo);
+				speakers.open(format);
+				speakers.start();
+
+				// Create a socket to receive audio data
+				DatagramSocket audioSocket = new DatagramSocket(voice_port);
+				byte[] buffer = new byte[1024];
+
+				while (true) {
+					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+					audioSocket.receive(packet);
+					speakers.write(packet.getData(), 0, packet.getLength());
+				}
+			} catch (LineUnavailableException | IOException e) {
+				e.printStackTrace();
+			}
+		}).start();
 	}
 	
 	// The method that corresponds to the Action Listener. Whenever an action is performed
@@ -150,7 +178,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 				// Create a socket to send and receive audio data
 				DatagramSocket audioSocket = new DatagramSocket();
 				InetAddress address = InetAddress.getByName(destIp);
-				int port = Integer.parseInt(destPort);
+				int port = Integer.parseInt(voicePort);
 
 				// Capture audio from the microphone
 				AudioFormat format = new AudioFormat(44100, 16, 2, true, true);
@@ -160,10 +188,10 @@ public class App extends Frame implements WindowListener, ActionListener {
 				microphone.start();
 
 				// Play received audio
-				DataLine.Info speakerInfo = new DataLine.Info(SourceDataLine.class, format);
-				SourceDataLine speakers = (SourceDataLine) AudioSystem.getLine(speakerInfo);
-				speakers.open(format);
-				speakers.start();
+				//DataLine.Info speakerInfo = new DataLine.Info(SourceDataLine.class, format);
+				//SourceDataLine speakers = (SourceDataLine) AudioSystem.getLine(speakerInfo);
+				//speakers.open(format);
+				//speakers.start();
 
 				// Create a thread to send audio data
 				new Thread(() -> {
@@ -180,18 +208,18 @@ public class App extends Frame implements WindowListener, ActionListener {
 				}).start();
 
 				// Create a thread to receive audio data
-				new Thread(() -> {
-					byte[] buffer = new byte[1024];
-					while (true) {
-						DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-						try {
-							audioSocket.receive(packet);
-							speakers.write(packet.getData(), 0, packet.getLength());
-						} catch (IOException ex) {
-							ex.printStackTrace();
-						}
-					}
-				}).start();
+				//new Thread(() -> {
+				//	byte[] buffer = new byte[1024];
+				//	while (true) {
+				//		DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+				//		try {
+				//			audioSocket.receive(packet);
+				//			speakers.write(packet.getData(), 0, packet.getLength());
+				//		} catch (IOException ex) {
+				//			ex.printStackTrace();
+				//		}
+				//	}
+				//}).start();
 			} catch (LineUnavailableException | UnknownHostException | SocketException ex) {
 				ex.printStackTrace();
 			}
