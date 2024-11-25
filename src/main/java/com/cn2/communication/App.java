@@ -41,7 +41,6 @@ public class App extends Frame implements WindowListener, ActionListener {
 	// Construct the app's frame and initialize important parameters
 	public App(String title) {
 		// 1. Defining the components of the GUI
-		// Setting up the characteristics of the frame
 		super(title);
 		darkGray = new Color(26, 26, 26);
 		lightGray = new Color(211, 211, 211);
