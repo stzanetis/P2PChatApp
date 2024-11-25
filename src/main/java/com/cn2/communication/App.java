@@ -105,12 +105,12 @@ public class App extends Frame implements WindowListener, ActionListener {
 		try {
 			DatagramSocket socket = new DatagramSocket(chat_port);	
 			new Thread(() -> {
+				byte[] buffer = new byte[1024];
 				while(true) {
 					try {
-						byte[] buffer = new byte[1024];
 						DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-						String message = new String(packet.getData(), 0, packet.getLength());
 						socket.receive(packet);
+						String message = new String(packet.getData(), 0, packet.getLength());
 						textArea.append("Received: " + message + "\n");
 					} catch (IOException e) {
 						e.printStackTrace();
@@ -173,7 +173,6 @@ public class App extends Frame implements WindowListener, ActionListener {
 				}
 			}
 		} else if (e.getSource() == callButton) {
-			// The "Call" button was clicked
 			try {
 				// Create a socket to send and receive audio data
 				DatagramSocket audioSocket = new DatagramSocket();
@@ -186,12 +185,6 @@ public class App extends Frame implements WindowListener, ActionListener {
 				TargetDataLine microphone = (TargetDataLine) AudioSystem.getLine(info);
 				microphone.open(format);
 				microphone.start();
-
-				// Play received audio
-				//DataLine.Info speakerInfo = new DataLine.Info(SourceDataLine.class, format);
-				//SourceDataLine speakers = (SourceDataLine) AudioSystem.getLine(speakerInfo);
-				//speakers.open(format);
-				//speakers.start();
 
 				// Create a thread to send audio data
 				new Thread(() -> {
@@ -206,20 +199,6 @@ public class App extends Frame implements WindowListener, ActionListener {
 						}
 					}
 				}).start();
-
-				// Create a thread to receive audio data
-				//new Thread(() -> {
-				//	byte[] buffer = new byte[1024];
-				//	while (true) {
-				//		DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-				//		try {
-				//			audioSocket.receive(packet);
-				//			speakers.write(packet.getData(), 0, packet.getLength());
-				//		} catch (IOException ex) {
-				//			ex.printStackTrace();
-				//		}
-				//	}
-				//}).start();
 			} catch (LineUnavailableException | UnknownHostException | SocketException ex) {
 				ex.printStackTrace();
 			}
