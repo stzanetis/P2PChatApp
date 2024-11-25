@@ -14,6 +14,13 @@ import java.awt.*;
 import java.awt.event.*;
 import java.lang.Thread;
 
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.DataLine;
+import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.SourceDataLine;
+import javax.sound.sampled.TargetDataLine;
+
 public class App extends Frame implements WindowListener, ActionListener {
 
 	// Definition of the app's fields
@@ -22,8 +29,8 @@ public class App extends Frame implements WindowListener, ActionListener {
 	static JFrame frame;					
 	static JButton sendButton;				
 	static JTextField meesageTextField;
-	public static Color dark_gray;
-	public static Color light_gray;			
+	public static Color darkGray;
+	public static Color lightGray;			
 	final static String newline="\n";		
 	static JButton callButton;
 	
@@ -33,25 +40,29 @@ public class App extends Frame implements WindowListener, ActionListener {
 	// Construct the app's frame and initialize important parameters
 	public App(String title) {
 		// 1. Defining the components of the GUI
-
 		// Setting up the characteristics of the frame
 		super(title);
-		dark_gray = new Color(26, 26, 26);
-		light_gray = new Color(211, 211, 211);
-		setBackground(dark_gray);
+		darkGray = new Color(26, 26, 26);
+		lightGray = new Color(211, 211, 211);
+		setBackground(darkGray);
 		setLayout(new FlowLayout());
 		addWindowListener(this);
 		setResizable(false);
+		Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+		int x = (screenSize.width - getWidth() - 425) / 2;
+		int y = (screenSize.height - getHeight() - 640) / 2;
+		setLocation(x, y);
 		
 		// Setting up the TextField
 		inputTextField = new TextField();
+		inputTextField.setBackground(lightGray);
 		inputTextField.setColumns(31);
 		
 		// Setting up the TextArea.
-		textArea = new JTextArea(34,40);
+		textArea = new JTextArea(34,36);
 		textArea.setLineWrap(true);
 		textArea.setEditable(false);
-		textArea.setBackground(light_gray);
+		textArea.setBackground(lightGray);
 		JScrollPane scrollPane = new JScrollPane(textArea);
 		scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
 		
@@ -72,14 +83,15 @@ public class App extends Frame implements WindowListener, ActionListener {
 	
 	// The main method of the application. It continuously listens for new messages.
 	public static void main(String[] args){
+		// 1. Create the app's window
+		App app = new App("Voice and Chat App by Tzanetis Savvas and Zoidis Vasilis");																		  
+		app.setSize(425,640);			  
+		app.setVisible(true);
+
+		// Ask the user for the destination IP address and port number
 		destIp = JOptionPane.showInputDialog(null, "Enter the IP address to send messages to:", "Destination IP", JOptionPane.QUESTION_MESSAGE);
 		destPort = JOptionPane.showInputDialog(null, "Enter the port number to send messages to:", "Destination Port", JOptionPane.QUESTION_MESSAGE);
 		int port = Integer.parseInt(destPort);
-
-		// 1. Create the app's window
-		App app = new App("Voice and Chat App by Tzanetis Savvas and Zoidis Vasilis");																		  
-		app.setSize(425,640);				  
-		app.setVisible(true);
 
 		// Shows the message destination IP address
 		textArea.append("Sending to " + destIp + " on port " + destPort + newline);
@@ -89,16 +101,16 @@ public class App extends Frame implements WindowListener, ActionListener {
 		try {
 			DatagramSocket socket = new DatagramSocket(port);	
 			new Thread(() -> {
-				try {
-					byte[] buffer = new byte[1024];
-					while (true) {
+				while(true) {
+					try {
+						byte[] buffer = new byte[1024];
 						DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-						socket.receive(packet);
 						String message = new String(packet.getData(), 0, packet.getLength());
+						socket.receive(packet);
 						textArea.append("Received: " + message + "\n");
-						}
-				} catch (IOException e) {
-					e.printStackTrace();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
 				}
 			}).start();
 		} catch (SocketException e) {
@@ -132,9 +144,57 @@ public class App extends Frame implements WindowListener, ActionListener {
 					ex.printStackTrace();
 				}
 			}
-		}else if(e.getSource() == callButton){
-			// The "Call" button was clicked	
-			// TODO: Your code goes here...
+		} else if (e.getSource() == callButton) {
+			// The "Call" button was clicked
+			try {
+				// Create a socket to send and receive audio data
+				DatagramSocket audioSocket = new DatagramSocket();
+				InetAddress address = InetAddress.getByName(destIp);
+				int port = Integer.parseInt(destPort);
+
+				// Capture audio from the microphone
+				AudioFormat format = new AudioFormat(44100, 16, 2, true, true);
+				DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
+				TargetDataLine microphone = (TargetDataLine) AudioSystem.getLine(info);
+				microphone.open(format);
+				microphone.start();
+
+				// Play received audio
+				DataLine.Info speakerInfo = new DataLine.Info(SourceDataLine.class, format);
+				SourceDataLine speakers = (SourceDataLine) AudioSystem.getLine(speakerInfo);
+				speakers.open(format);
+				speakers.start();
+
+				// Create a thread to send audio data
+				new Thread(() -> {
+					byte[] buffer = new byte[1024];
+					while (true) {
+						int bytesRead = microphone.read(buffer, 0, buffer.length);
+						DatagramPacket packet = new DatagramPacket(buffer, bytesRead, address, port);
+						try {
+							audioSocket.send(packet);
+						} catch (IOException ex) {
+							ex.printStackTrace();
+						}
+					}
+				}).start();
+
+				// Create a thread to receive audio data
+				new Thread(() -> {
+					byte[] buffer = new byte[1024];
+					while (true) {
+						DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+						try {
+							audioSocket.receive(packet);
+							speakers.write(packet.getData(), 0, packet.getLength());
+						} catch (IOException ex) {
+							ex.printStackTrace();
+						}
+					}
+				}).start();
+			} catch (LineUnavailableException | UnknownHostException | SocketException ex) {
+				ex.printStackTrace();
+			}
 		}
 	}
 
