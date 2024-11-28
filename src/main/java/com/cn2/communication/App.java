@@ -27,13 +27,14 @@ public class App extends Frame implements WindowListener, ActionListener {
 	static TextField inputTextField;		
 	static JTextArea textArea;				 
 	static JFrame frame;					
-	static JButton sendButton;				
+	static JButton sendButton;
+	static JButton callButton;		
 	static JTextField meesageTextField;
-	public static Color darkGray;
-	public static Color lightGray;			
+	public static Color darkGray;			
 	final static String newline="\n";		
-	static JButton callButton;
-	
+
+	// TODO: Please define and initialize your variables here...
+	public static Color lightGray;
 	public static String destIp;
 	public static String chatPort;
 	public static String voicePort;
@@ -41,30 +42,30 @@ public class App extends Frame implements WindowListener, ActionListener {
 	// Construct the app's frame and initialize important parameters
 	public App(String title) {
 		// 1. Defining the components of the GUI
+		// Setting up the characteristics of the frame
 		super(title);
 		darkGray = new Color(26, 26, 26);
 		lightGray = new Color(211, 211, 211);
 		setBackground(darkGray);
 		setLayout(new FlowLayout());
 		addWindowListener(this);
+
 		setResizable(false);
 		Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
-		int x = (screenSize.width - getWidth() - 425) / 2;
-		int y = (screenSize.height - getHeight() - 640) / 2;
-		setLocation(x, y);
+		setLocation((screenSize.width - getWidth() - 425) / 2, (screenSize.height - getHeight() - 640) / 2);
 		
 		// Setting up the TextField
 		inputTextField = new TextField();
-		inputTextField.setBackground(lightGray);
 		inputTextField.setColumns(31);
+		inputTextField.setBackground(lightGray);
 		
 		// Setting up the TextArea.
 		textArea = new JTextArea(34,36);
 		textArea.setLineWrap(true);
 		textArea.setEditable(false);
-		textArea.setBackground(lightGray);
 		JScrollPane scrollPane = new JScrollPane(textArea);
 		scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+		textArea.setBackground(lightGray);
 		
 		// Setting up the buttons
 		sendButton = new JButton("Send");
@@ -91,53 +92,60 @@ public class App extends Frame implements WindowListener, ActionListener {
 		// Ask the user for the destination IP address and port number
 		destIp = JOptionPane.showInputDialog(null, "Enter the IP address to send messages to:", "Destination IP", JOptionPane.QUESTION_MESSAGE);
 		chatPort = JOptionPane.showInputDialog(null, "Enter the port number to send messages to:", "Destination Port", JOptionPane.QUESTION_MESSAGE);
-		int chat_port = Integer.parseInt(chatPort);
 		voicePort = JOptionPane.showInputDialog(null, "Enter the port number to send voice data to:", "Voice Port", JOptionPane.QUESTION_MESSAGE);
-		int voice_port = Integer.parseInt(voicePort);
-
 
 		// Shows the message destination IP address
 		textArea.append("Sending to " + destIp + newline);
 		inputTextField.setText("");
 
-		// Create a thread to receive messages
-		try {
-			DatagramSocket socket = new DatagramSocket(chat_port);	
-			new Thread(() -> {
-				byte[] buffer = new byte[1024];
+		// Create a thread to receive text data
+		new Thread(() -> {
+			byte[] buffer = new byte[1024];
+			try (DatagramSocket textSocket = new DatagramSocket(Integer.parseInt(chatPort))) {
 				while(true) {
-					try {
-						DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-						socket.receive(packet);
+					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+					textSocket.receive(packet);
+					String senderIp = packet.getAddress().getHostAddress();
+					if (senderIp.equals(destIp)) {
 						String message = new String(packet.getData(), 0, packet.getLength());
 						textArea.append("Received: " + message + "\n");
-					} catch (IOException e) {
-						e.printStackTrace();
 					}
 				}
-			}).start();
-		} catch (SocketException e) {
-			e.printStackTrace();
-		}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}).start();
 
 		// Create a thread to receive audio data
 		new Thread(() -> {
-			try {
-				// Set up the audio format and line for playback
+			byte[] buffer = new byte[1024];
+			try (DatagramSocket audioSocket = new DatagramSocket(Integer.parseInt(voicePort));){
+				// Create a speaker to play the audio
 				AudioFormat format = new AudioFormat(44100, 16, 2, true, true);
 				DataLine.Info speakerInfo = new DataLine.Info(SourceDataLine.class, format);
 				SourceDataLine speakers = (SourceDataLine) AudioSystem.getLine(speakerInfo);
 				speakers.open(format);
 				speakers.start();
-
-				// Create a socket to receive audio data
-				DatagramSocket audioSocket = new DatagramSocket(voice_port);
-				byte[] buffer = new byte[1024];
-
-				while (true) {
-					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-					audioSocket.receive(packet);
-					speakers.write(packet.getData(), 0, packet.getLength());
+			
+				while(true) {
+					DatagramPacket requestPacket = new DatagramPacket(buffer, buffer.length);
+					audioSocket.receive(requestPacket);
+					String message0 = new String(requestPacket.getData(), 0, requestPacket.getLength());
+					if (message0.equals("CALL_REQUEST")) {
+						int response = JOptionPane.showConfirmDialog(null, "Do you want to accept the call?", "Incoming Call", JOptionPane.YES_NO_OPTION);
+						if (response == JOptionPane.NO_OPTION) {
+							return;
+						} else {
+							while(true) {
+								DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+								audioSocket.receive(packet);
+								String senderIp = packet.getAddress().getHostAddress();
+								if (senderIp.equals(destIp)) {
+									speakers.write(packet.getData(), 0, packet.getLength());
+								}
+							}
+						}
+					}
 				}
 			} catch (LineUnavailableException | IOException e) {
 				e.printStackTrace();
@@ -151,12 +159,13 @@ public class App extends Frame implements WindowListener, ActionListener {
 	public void actionPerformed(ActionEvent e) {
 		// Check which button was clicked.
 		if (e.getSource() == sendButton){	
+			// The "Send" button was clicked
 			String message = inputTextField.getText();
 			if (!message.trim().isEmpty()) {
 				try {
-					DatagramSocket socket = new DatagramSocket();
-					InetAddress address = InetAddress.getByName(destIp); // Replace with the target IP address
-					int port = 8080; // Replace with the target port number
+					DatagramSocket textSocket = new DatagramSocket();
+					InetAddress address = InetAddress.getByName(destIp);
+					int port = Integer.parseInt(chatPort);
 					byte[] buffer = message.getBytes();
 					DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, port);
 
@@ -164,14 +173,31 @@ public class App extends Frame implements WindowListener, ActionListener {
 					textArea.append("Me: " + message + newline);
 					inputTextField.setText("");
 
-					//Send the message to the target
-					socket.send(packet);
-					socket.close();
+					// Send the message to the target
+					textSocket.send(packet);
+					textSocket.close();
 				} catch (IOException ex) {
 					ex.printStackTrace();
 				}
 			}
 		} else if (e.getSource() == callButton) {
+			// The "Call" button was clicked
+			// Send a call request to the target
+			try {
+				DatagramSocket callRequestSocket = new DatagramSocket();
+				InetAddress address = InetAddress.getByName(destIp);
+            	int callRequestPort = Integer.parseInt(voicePort);
+            	String callRequestMessage = "CALL_REQUEST";
+				byte[] buffer = callRequestMessage.getBytes();
+				DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, callRequestPort);
+
+				// Send the call request to the target
+				callRequestSocket.send(packet);
+				callRequestSocket.close();
+			} catch (IOException ex) {
+				ex.printStackTrace();
+			}
+
 			try {
 				// Create a socket to send and receive audio data
 				DatagramSocket audioSocket = new DatagramSocket();
@@ -188,17 +214,20 @@ public class App extends Frame implements WindowListener, ActionListener {
 				// Create a thread to send audio data
 				new Thread(() -> {
 					byte[] buffer = new byte[1024];
-					while (true) {
-						int bytesRead = microphone.read(buffer, 0, buffer.length);
-						DatagramPacket packet = new DatagramPacket(buffer, bytesRead, address, port);
-						try {
+					try {
+						while(true) {
+							int bytesRead = microphone.read(buffer, 0, buffer.length);
+							DatagramPacket packet = new DatagramPacket(buffer, bytesRead, address, port);
 							audioSocket.send(packet);
-						} catch (IOException ex) {
-							ex.printStackTrace();
 						}
+					} catch (IOException ex) {
+						ex.printStackTrace();
+					} finally {
+						microphone.close();
+						audioSocket.close();
 					}
 				}).start();
-			} catch (LineUnavailableException | UnknownHostException | SocketException ex) {
+			} catch (LineUnavailableException | IOException ex) {
 				ex.printStackTrace();
 			}
 		}
