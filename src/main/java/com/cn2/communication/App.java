@@ -38,7 +38,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 	public static String destIp;
 	public static String chatPort;
 	public static String voicePort;
-	private boolean callInProgress = false;
+	private static boolean callInProgress = false;
 	private TargetDataLine microphone;
 	private DatagramSocket audioSocket;
 	
@@ -139,6 +139,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 						if (response == JOptionPane.NO_OPTION) {
 							return;
 						} else {
+							callInProgress = true;
 							while (true) {
 								DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 								audioSocket.receive(packet);
@@ -146,6 +147,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 								if (senderIp.equals(destIp)) {
 									String message = new String(packet.getData(), 0, packet.getLength());
 									if (message.equals("CALL_END")) {
+										callInProgress = false;
 										textArea.append("Call ended" + newline);
 										break;
 									}
