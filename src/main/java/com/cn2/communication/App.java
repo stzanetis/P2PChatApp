@@ -163,13 +163,13 @@ public class App extends Frame implements WindowListener, ActionListener {
 							// Client did not accept the call
 
 							// Send a response to the caller
-							DatagramSocket responseSocket = new DatagramSocket();
+							try (DatagramSocket responseSocket = new DatagramSocket()) {
 							InetAddress address = InetAddress.getByName(destIp);
 							int port = Integer.parseInt(voicePort);
 							byte[] responseBuffer = "CALL_REJECTED".getBytes();
 							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, port);
 							responseSocket.send(responsePacket);
-							responseSocket.close();
+							}
 							continue;
 						} else {
 							// Client accepted the call
@@ -177,13 +177,13 @@ public class App extends Frame implements WindowListener, ActionListener {
 							textArea.append("Call accepted." + newline);
 
 							// Send a response to the caller
-							DatagramSocket responseSocket = new DatagramSocket();
+							try (DatagramSocket responseSocket = new DatagramSocket()) {
 							InetAddress address = InetAddress.getByName(destIp);
 							int port = Integer.parseInt(voicePort);
 							byte[] responseBuffer = "CALL_ACCEPTED".getBytes();
 							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, port);
 							responseSocket.send(responsePacket);
-							responseSocket.close();
+							}
 
 							while(callInProgress) {
 								DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
