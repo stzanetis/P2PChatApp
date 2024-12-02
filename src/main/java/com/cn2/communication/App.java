@@ -146,63 +146,20 @@ public class App extends Frame implements WindowListener, ActionListener {
 		new Thread(() -> {
 			byte[] buffer = new byte[1024];
 			try (DatagramSocket audioSocket = new DatagramSocket(Integer.parseInt(voicePort))) {
-				// Set up the audio format and line for playback
 				AudioFormat format = new AudioFormat(44100, 16, 2, true, true);
-				DataLine.Info speakerInfo = new DataLine.Info(SourceDataLine.class, format);
-				SourceDataLine speakers = (SourceDataLine) AudioSystem.getLine(speakerInfo);
+				DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
+				SourceDataLine speakers = (SourceDataLine) AudioSystem.getLine(info);
 				speakers.open(format);
 				speakers.start();
-				
+
 				while (true) {
-					DatagramPacket requestPacket = new DatagramPacket(buffer, buffer.length);
-					audioSocket.receive(requestPacket);
-					String requestMessage = new String(requestPacket.getData(), 0, requestPacket.getLength());
-					if (requestMessage.equals("CALL_REQUEST") && !callInProgress) {
-						int response = JOptionPane.showConfirmDialog(null, "Incoming call. Accept?", "Incoming Call", JOptionPane.YES_NO_OPTION);
-						if (response == JOptionPane.NO_OPTION) {
-							// Client did not accept the call
-
-							// Send a response to the caller
-							try (DatagramSocket responseSocket = new DatagramSocket()) {
-							InetAddress address = InetAddress.getByName(destIp);
-							int port = Integer.parseInt(voicePort);
-							byte[] responseBuffer = "CALL_REJECTED".getBytes();
-							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, port);
-							responseSocket.send(responsePacket);
-							}
-							continue;
-						} else {
-							// Client accepted the call
-							callInProgress = true;
-							textArea.append("Call accepted." + newline);
-
-							// Send a response to the caller
-							try (DatagramSocket responseSocket = new DatagramSocket()) {
-							InetAddress address = InetAddress.getByName(destIp);
-							int port = Integer.parseInt(voicePort);
-							byte[] responseBuffer = "CALL_ACCEPTED".getBytes();
-							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, port);
-							responseSocket.send(responsePacket);
-							}
-
-							while(callInProgress) {
-								DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-								audioSocket.receive(packet);
-								if (packet.getAddress().getHostAddress().equals(destIp)) {
-									String message = new String(packet.getData(), 0, packet.getLength());
-									if (message.equals("CALL_END")) {
-										callInProgress = false;
-										speakers.close();
-										textArea.append("Call ended." + newline);
-										break;
-									}
-									speakers.write(packet.getData(), 0, packet.getLength());
-								}
-							}
-						}
+					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+					audioSocket.receive(packet);
+					if (packet.getAddress().getHostAddress().equals(destIp)) {
+						speakers.write(packet.getData(), 0, packet.getLength());
 					}
 				}
-			} catch (LineUnavailableException | IOException e) {
+			} catch (IOException | LineUnavailableException e) {
 				e.printStackTrace();
 			}
 		}).start();
@@ -237,120 +194,63 @@ public class App extends Frame implements WindowListener, ActionListener {
 			}
 		} else if (e.getSource() == callButton) {
 			// The "Call" button was clicked
-			if (callInProgress) {
-				// End the call
-				callInProgress = false;
-				textArea.append("Call ended." + newline);
-				audioSocket.close();
-				microphone.close();
-				callButton.setText("Call");
+			if (!callInProgress) {
+				callInProgress = true;
+				callButton.setText("End Call");
 
-				// Send a message to the other client to end the call
-				try {
-					DatagramSocket audioSocket = new DatagramSocket();
-					InetAddress address = InetAddress.getByName(destIp);
-					int port = Integer.parseInt(voicePort);
-					byte[] buffer = "CALL_END".getBytes();
-					DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, port);
-					audioSocket.send(packet);
-					audioSocket.close();
-				} catch (IOException ex) {
-					ex.printStackTrace();
-				}
-			} else {
-				// Send a call request to target
-				try {
-					DatagramSocket audioSocket = new DatagramSocket();
-					InetAddress address = InetAddress.getByName(destIp);
-					int port = Integer.parseInt(voicePort);
-					byte[] buffer = "CALL_REQUEST".getBytes();
-					DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, port);
-					audioSocket.send(packet);
-					audioSocket.close();
-				} catch (IOException ex) {
-					ex.printStackTrace();
-				}
-
-				// Wait for a response from the target
-				try {
-					DatagramSocket audioSocket = new DatagramSocket(Integer.parseInt(voicePort));
-					byte[] buffer = new byte[1024];
-					DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length);
-					audioSocket.receive(responsePacket);
-					String response = new String(responsePacket.getData(), 0, responsePacket.getLength());
-					if (response.equals("CALL_ACCEPTED")) {
-						// Target accepted the call
-						callInProgress = true;
-						textArea.append("Call accepted." + newline);
-						textArea.append("");
-						callButton.setText("End");
-
-						// Capture audio from the microphone
+				// Start a thread to capture and send audio
+				new Thread(() -> {
+					try {
 						AudioFormat format = new AudioFormat(44100, 16, 2, true, true);
 						DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
-						TargetDataLine microphone = (TargetDataLine) AudioSystem.getLine(info);
+						microphone = (TargetDataLine) AudioSystem.getLine(info);
 						microphone.open(format);
 						microphone.start();
 
-						// Create a thread to send audio data
-						new Thread(() -> {
-							byte[] audioBuffer = new byte[1024];
-							try {
-								while (callInProgress) {
-									int bytesRead = microphone.read(audioBuffer, 0, audioBuffer.length);
-									DatagramPacket packet = new DatagramPacket(audioBuffer, bytesRead, responsePacket.getAddress(), responsePacket.getPort());
-									audioSocket.send(packet);
-								}
-							} catch (IOException ex) {
-								ex.printStackTrace();
-							} finally {
-								microphone.close();
-								audioSocket.close();
-							}
-						}).start();
-					} else {
-						// Target rejected the call
-						textArea.append("Call rejected." + newline);
-						textArea.append("");
-					}
-					audioSocket.close();
-				} catch (IOException | LineUnavailableException ex) {
-					ex.printStackTrace();
-				}
-			}
+						byte[] buffer = new byte[1024];
+						DatagramSocket audioSocket = new DatagramSocket();
+						InetAddress address = InetAddress.getByName(destIp);
 
-			try {
-				// Create a socket to send and receive audio data
-				DatagramSocket audioSocket = new DatagramSocket();
-				InetAddress address = InetAddress.getByName(destIp);
-				int port = Integer.parseInt(voicePort);
-
-				// Capture audio from the microphone
-				AudioFormat format = new AudioFormat(44100, 16, 2, true, true);
-				DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
-				TargetDataLine microphone = (TargetDataLine) AudioSystem.getLine(info);
-				microphone.open(format);
-				microphone.start();
-
-				// Create a thread to send audio data
-				new Thread(() -> {
-					byte[] buffer = new byte[1024];
-					try {
-						while (true) {
+						while (callInProgress) {
 							int bytesRead = microphone.read(buffer, 0, buffer.length);
-							DatagramPacket packet = new DatagramPacket(buffer, bytesRead, address, port);
+							DatagramPacket packet = new DatagramPacket(buffer, bytesRead, address, Integer.parseInt(voicePort));
 							audioSocket.send(packet);
 						}
-					} catch (IOException ex) {
+
+						microphone.close();
+						audioSocket.close();
+					} catch (LineUnavailableException | IOException ex) {
 						ex.printStackTrace();
-					} finally {
-						if (audioSocket != null && !audioSocket.isClosed()) {
-							audioSocket.close();
-						}
 					}
 				}).start();
-			} catch (LineUnavailableException | UnknownHostException | SocketException ex) {
-				ex.printStackTrace();
+
+				// Start a thread to receive and play audio
+				new Thread(() -> {
+					try {
+						AudioFormat format = new AudioFormat(44100, 16, 2, true, true);
+						DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
+						SourceDataLine speakers = (SourceDataLine) AudioSystem.getLine(info);
+						speakers.open(format);
+						speakers.start();
+
+						byte[] buffer = new byte[1024];
+						DatagramSocket audioSocket = new DatagramSocket(Integer.parseInt(voicePort));
+
+						while (callInProgress) {
+							DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+							audioSocket.receive(packet);
+							speakers.write(packet.getData(), 0, packet.getLength());
+						}
+
+						speakers.close();
+						audioSocket.close();
+					} catch (LineUnavailableException | IOException ex) {
+						ex.printStackTrace();
+					}
+				}).start();
+			} else {
+				callInProgress = false;
+				callButton.setText("Call");
 			}
 		}
 	}
