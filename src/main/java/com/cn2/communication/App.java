@@ -342,6 +342,10 @@ public class App extends Frame implements WindowListener, ActionListener {
 							audioSocket.send(packet);
 						} catch (IOException ex) {
 							ex.printStackTrace();
+						} finally {
+							if (audioSocket != null) {
+								audioSocket.close();
+							}
 						}
 					}
 				}).start();
