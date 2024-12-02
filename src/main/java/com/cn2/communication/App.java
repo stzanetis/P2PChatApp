@@ -136,7 +136,8 @@ public class App extends Frame implements WindowListener, ActionListener {
 					textSocket.receive(packet);
 					if (packet.getAddress().getHostAddress().equals(destIp)) {
 						String message = new String(packet.getData(), 0, packet.getLength());
-						textArea.append("Received: " + decrypt(message) + newline);
+						String decryptedMessage = decrypt(message);
+						textArea.append("Received: " + decryptedMessage + newline);
 					}
 				}
 			} catch (IOException e) {
@@ -159,10 +160,11 @@ public class App extends Frame implements WindowListener, ActionListener {
 			String message = inputTextField.getText();
 			if (!message.trim().isEmpty()) {
 				try {
+					String encryptedMessage = encrypt(message);
 					DatagramSocket textSocket = new DatagramSocket();
 					InetAddress address = InetAddress.getByName(destIp); // Replace with the target IP address
 					int port = Integer.parseInt(chatPort); // Replace with the target port number
-					byte[] buffer = message.getBytes();
+					byte[] buffer = encryptedMessage.getBytes();
 					DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, port);
 
 					// Print the message locally
@@ -196,19 +198,20 @@ public class App extends Frame implements WindowListener, ActionListener {
 	}
 
 	// Method to decrypt messages
-	public static String decrypt(String message) {
+	public static String decrypt(String encryptedMessage) {
 		try {
 			Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
 			cipher.init(Cipher.DECRYPT_MODE, secretKey);
-			byte[] decrypted = cipher.doFinal(Base64.getDecoder().decode(message));
+			byte[] decodedMessage = Base64.getDecoder().decode(encryptedMessage);
+			byte[] decrypted = cipher.doFinal(decodedMessage);
 			return new String(decrypted, "UTF-8");
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		return message;
+		return null;
 	}
 
-	// Method to start audio listening and sending
+	// Method to start sending audio data
 	public static void startAudioCommunication() {
 		new Thread(() -> {
 			try {
