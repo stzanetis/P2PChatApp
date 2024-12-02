@@ -146,44 +146,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 
 		
 		// Create a thread to listen for call requests
-		new Thread(() -> {
-			try (DatagramSocket callSocket = new DatagramSocket(Integer.parseInt(requestsPort))) {
-				byte[] buffer = new byte[1024];
-				while (true) {
-					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-					callSocket.receive(packet);
-					String message = new String(packet.getData(), 0, packet.getLength());
-					if (message.equals("CALL_REQUEST")) {
-						int response = JOptionPane.showConfirmDialog(null, "Incoming call", "Call Request", JOptionPane.YES_NO_OPTION);
-						InetAddress address = packet.getAddress();
-						if (response == JOptionPane.YES_OPTION) {
-							System.out.println("Call accepted");
-							// Send call accepted message
-							String callAccepted = "CALL_ACCEPTED";
-							byte[] responseBuffer = callAccepted.getBytes();
-							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, Integer.parseInt(requestsPort));
-							callSocket.send(responsePacket);
-
-							// Start receiving audio data
-							callInProgress = true;
-							textArea.append("Call accepted" + newline);
-							callButton.setText("End");
-							startAudioCommunication();
-							startAudioReception();
-						} else {
-							// Send call rejected message
-							String callRejected = "CALL_REJECTED";
-							byte[] responseBuffer = callRejected.getBytes();
-							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, Integer.parseInt(requestsPort));
-							callSocket.send(responsePacket);
-							textArea.append("Call rejected" + newline);
-						}
-					}
-				}
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}).start();
+		startAudioReception();
 	}
 	
 	// The method that corresponds to the Action Listener. Whenever an action is performed
@@ -215,53 +178,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 			}
 		} else if (e.getSource() == callButton) {
 			// The "Call" button was clicked
-			if (callInProgress) {
-				// End the call
-				callInProgress = false;
-				if (microphone != null) {
-					microphone.stop();
-					microphone.close();
-				}
-				if (audioSocket != null) {
-					audioSocket.stop();
-					audioSocket.close();
-				}
-				textArea.append("Call ended" + newline);
-				callButton.setText("Call");
-			} else {
-				// Start the call
-				new Thread(() -> {
-					try {
-						// Send call request message
-						DatagramSocket requestSocket = new DatagramSocket();
-						InetAddress address = InetAddress.getByName(destIp);
-						String callRequest = "CALL_REQUEST";
-						byte[] requestBuffer = callRequest.getBytes();
-						DatagramPacket requestPacket = new DatagramPacket(requestBuffer, requestBuffer.length, address, Integer.parseInt(requestsPort));
-						requestSocket.send(requestPacket);
-	
-						// Wait for call response
-						byte[] responseBuffer = new byte[1024];
-						DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length);
-						requestSocket.receive(responsePacket);
-						String response = new String(responsePacket.getData(), 0, responsePacket.getLength());
-	
-						// If the call is accepted, start audio communication
-						if (response.equals("CALL_ACCEPTED")) {
-							callInProgress = true;
-							textArea.append("Call accepted" + newline);
-							textArea.append("");
-
-							callButton.setText("End");
-							startAudioCommunication();
-						} else {
-							textArea.append("Call rejected" + newline);
-						}
-					} catch (IOException ex) {
-						ex.printStackTrace();
-					}
-				}).start();
-			}
+			startAudioCommunication();
 		}
 	}
 
