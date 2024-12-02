@@ -145,20 +145,21 @@ public class App extends Frame implements WindowListener, ActionListener {
 		
 		// Create a thread to listen for call requests
 		new Thread(() -> {
-			try (DatagramSocket callSocket = new DatagramSocket(Integer.parseInt(chatPort))) {
+			try (DatagramSocket callSocket = new DatagramSocket(Integer.parseInt(voicePort))) {
 				byte[] buffer = new byte[1024];
 				while (true) {
 					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 					callSocket.receive(packet);
 					String message = new String(packet.getData(), 0, packet.getLength());
 					if (message.equals("CALL_REQUEST")) {
-						int response = JOptionPane.showConfirmDialog(null, "Incoming call from " + packet.getAddress().getHostAddress() + ". Accept?", "Call Request", JOptionPane.YES_NO_OPTION);
+						int response = JOptionPane.showConfirmDialog(null, "Incoming call", "Call Request", JOptionPane.YES_NO_OPTION);
 						InetAddress address = packet.getAddress();
 						if (response == JOptionPane.YES_OPTION) {
+							System.out.println("Call accepted");
 							// Send call accepted message
 							String callAccepted = "CALL_ACCEPTED";
 							byte[] responseBuffer = callAccepted.getBytes();
-							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, Integer.parseInt(chatPort));
+							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, Integer.parseInt(voicePort));
 							callSocket.send(responsePacket);
 
 							// Start receiving audio data
@@ -166,11 +167,12 @@ public class App extends Frame implements WindowListener, ActionListener {
 							textArea.append("Call accepted" + newline);
 							callButton.setText("End");
 							startAudioCommunication();
+							startAudioReception();
 						} else {
 							// Send call rejected message
 							String callRejected = "CALL_REJECTED";
 							byte[] responseBuffer = callRejected.getBytes();
-							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, Integer.parseInt(chatPort));
+							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, Integer.parseInt(voicePort));
 							callSocket.send(responsePacket);
 							textArea.append("Call rejected" + newline);
 						}
@@ -233,7 +235,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 						InetAddress address = InetAddress.getByName(destIp);
 						String callRequest = "CALL_REQUEST";
 						byte[] requestBuffer = callRequest.getBytes();
-						DatagramPacket requestPacket = new DatagramPacket(requestBuffer, requestBuffer.length, address, Integer.parseInt(chatPort));
+						DatagramPacket requestPacket = new DatagramPacket(requestBuffer, requestBuffer.length, address, Integer.parseInt(voicePort));
 						requestSocket.send(requestPacket);
 	
 						// Wait for call response
@@ -306,6 +308,31 @@ public class App extends Frame implements WindowListener, ActionListener {
 					int bytesRead = microphone.read(buffer, 0, buffer.length);
 					DatagramPacket packet = new DatagramPacket(buffer, bytesRead, address, Integer.parseInt(voicePort));
 					voiceSocket.send(packet);
+				}
+			} catch (IOException | LineUnavailableException ex) {
+				ex.printStackTrace();
+			}
+		}).start();
+	}
+
+	// Method to start receiving audio data and playing it
+	public static void startAudioReception() {
+		new Thread(() -> {
+			try {
+				// Start receiving and playing audio data
+				AudioFormat format = new AudioFormat(44100, 16, 2, true, true);
+				DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
+				audioSocket = (SourceDataLine) AudioSystem.getLine(info);
+				audioSocket.open(format);
+				audioSocket.start();
+
+				DatagramSocket voiceSocket = new DatagramSocket(Integer.parseInt(voicePort));
+				byte[] buffer = new byte[4096];
+
+				while (true) {
+					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+					voiceSocket.receive(packet);
+					audioSocket.write(packet.getData(), 0, packet.getLength());
 				}
 			} catch (IOException | LineUnavailableException ex) {
 				ex.printStackTrace();
