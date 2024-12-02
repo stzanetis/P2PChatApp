@@ -288,7 +288,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 						// Capture audio from the microphone
 						AudioFormat format = new AudioFormat(44100, 16, 2, true, true);
 						DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
-						microphone = (TargetDataLine) AudioSystem.getLine(info);
+						TargetDataLine microphone = (TargetDataLine) AudioSystem.getLine(info);
 						microphone.open(format);
 						microphone.start();
 
@@ -335,17 +335,17 @@ public class App extends Frame implements WindowListener, ActionListener {
 				// Create a thread to send audio data
 				new Thread(() -> {
 					byte[] buffer = new byte[1024];
-					while (true) {
-						int bytesRead = microphone.read(buffer, 0, buffer.length);
-						DatagramPacket packet = new DatagramPacket(buffer, bytesRead, address, port);
-						try {
+					try {
+						while (true) {
+							int bytesRead = microphone.read(buffer, 0, buffer.length);
+							DatagramPacket packet = new DatagramPacket(buffer, bytesRead, address, port);
 							audioSocket.send(packet);
-						} catch (IOException ex) {
-							ex.printStackTrace();
-						} finally {
-							if (audioSocket != null) {
-								audioSocket.close();
-							}
+						}
+					} catch (IOException ex) {
+						ex.printStackTrace();
+					} finally {
+						if (audioSocket != null && !audioSocket.isClosed()) {
+							audioSocket.close();
 						}
 					}
 				}).start();
@@ -378,7 +378,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		return null;
+		return message;
 	}
 
 	// These methods have to do with the GUI. You can use them if you wish to define what the program should do in specific scenarios
