@@ -21,6 +21,11 @@ import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.SourceDataLine;
 import javax.sound.sampled.TargetDataLine;
 
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import java.util.Base64;
+
 public class App extends Frame implements WindowListener, ActionListener {
 
 	// Definition of the app's fields
@@ -28,47 +33,56 @@ public class App extends Frame implements WindowListener, ActionListener {
 	static JTextArea textArea;				 
 	static JFrame frame;					
 	static JButton sendButton;
-	static JButton callButton;		
+	static JButton callButton;			
 	static JTextField meesageTextField;
-	public static Color darkGray;			
+	public static Color darkGray;
+	public static Color lightGray;			
 	final static String newline="\n";		
-
-	// TODO: Please define and initialize your variables here...
-	public static Color lightGray;
+	
 	public static String destIp;
 	public static String chatPort;
 	public static String voicePort;
-	private static boolean callInProgress = false;
+	public static boolean callInProgress = false;
 	private TargetDataLine microphone;
-	private DatagramSocket audioSocket;
+	private SourceDataLine audioSocket;
+	private static SecretKey secretKey;
+
+	// Intialize the secret key for encryption and decryption
+	static {
+		try {
+			KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+			keyGen.init(128);
+			secretKey = keyGen.generateKey();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
 	
 	// Construct the app's frame and initialize important parameters
 	public App(String title) {
 		// 1. Defining the components of the GUI
-		// Setting up the characteristics of the frame
 		super(title);
 		darkGray = new Color(26, 26, 26);
 		lightGray = new Color(211, 211, 211);
 		setBackground(darkGray);
 		setLayout(new FlowLayout());
 		addWindowListener(this);
-
 		setResizable(false);
 		Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
 		setLocation((screenSize.width - getWidth() - 425) / 2, (screenSize.height - getHeight() - 640) / 2);
-		
+
 		// Setting up the TextField
 		inputTextField = new TextField();
-		inputTextField.setColumns(31);
 		inputTextField.setBackground(lightGray);
+		inputTextField.setColumns(31);
 		
 		// Setting up the TextArea.
 		textArea = new JTextArea(34,36);
 		textArea.setLineWrap(true);
 		textArea.setEditable(false);
+		textArea.setBackground(lightGray);
 		JScrollPane scrollPane = new JScrollPane(textArea);
 		scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-		textArea.setBackground(lightGray);
 		
 		// Setting up the buttons
 		sendButton = new JButton("Send");
@@ -83,6 +97,16 @@ public class App extends Frame implements WindowListener, ActionListener {
 		// 3. Linking the buttons to the ActionListener
 		sendButton.addActionListener(this);
 		callButton.addActionListener(this);
+
+		// 4. Addint a KeyListener to the TextField to send the message when the Enter key is pressed
+		inputTextField.addKeyListener(new KeyAdapter() {
+			@Override
+			public void keyPressed(KeyEvent e) {
+				if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+					sendButton.doClick();
+				}
+			}
+		});
 	}
 	
 	// The main method of the application. It continuously listens for new messages.
@@ -94,24 +118,23 @@ public class App extends Frame implements WindowListener, ActionListener {
 
 		// Ask the user for the destination IP address and port number
 		destIp = JOptionPane.showInputDialog(null, "Enter the IP address to send messages to:", "Destination IP", JOptionPane.QUESTION_MESSAGE);
-		chatPort = JOptionPane.showInputDialog(null, "Enter the port number to send messages to:", "Destination Port", JOptionPane.QUESTION_MESSAGE);
-		voicePort = JOptionPane.showInputDialog(null, "Enter the port number to send voice data to:", "Voice Port", JOptionPane.QUESTION_MESSAGE);
+		chatPort = "12345";  // Replace with the target port number
+		voicePort = "12346"; // Replace with the target port number
 
 		// Shows the message destination IP address
 		textArea.append("Sending to " + destIp + newline);
 		inputTextField.setText("");
 
-		// Create a thread to receive text data
+		// Create a thread to receive messages
 		new Thread(() -> {
 			byte[] buffer = new byte[1024];
 			try (DatagramSocket textSocket = new DatagramSocket(Integer.parseInt(chatPort))) {
-				while(true) {
+				while (true) {
 					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 					textSocket.receive(packet);
-					String senderIp = packet.getAddress().getHostAddress();
-					if (senderIp.equals(destIp)) {
+					if (packet.getAddress().getHostAddress().equals(destIp)) {
 						String message = new String(packet.getData(), 0, packet.getLength());
-						textArea.append("Received: " + message + "\n");
+						textArea.append("Received: " + decrypt(message) + newline);
 					}
 				}
 			} catch (IOException e) {
@@ -122,33 +145,55 @@ public class App extends Frame implements WindowListener, ActionListener {
 		// Create a thread to receive audio data
 		new Thread(() -> {
 			byte[] buffer = new byte[1024];
-			try (DatagramSocket audioSocket = new DatagramSocket(Integer.parseInt(voicePort));){
-				// Create a speaker to play the audio
+			try (DatagramSocket audioSocket = new DatagramSocket(Integer.parseInt(voicePort))) {
+				// Set up the audio format and line for playback
 				AudioFormat format = new AudioFormat(44100, 16, 2, true, true);
 				DataLine.Info speakerInfo = new DataLine.Info(SourceDataLine.class, format);
 				SourceDataLine speakers = (SourceDataLine) AudioSystem.getLine(speakerInfo);
 				speakers.open(format);
 				speakers.start();
-			
-				while(true) {
+				
+				while (true) {
 					DatagramPacket requestPacket = new DatagramPacket(buffer, buffer.length);
 					audioSocket.receive(requestPacket);
-					String message0 = new String(requestPacket.getData(), 0, requestPacket.getLength());
-					if (message0.equals("CALL_REQUEST")) {
-						int response = JOptionPane.showConfirmDialog(null, "Do you want to accept the call?", "Incoming Call", JOptionPane.YES_NO_OPTION);
+					String requestMessage = new String(requestPacket.getData(), 0, requestPacket.getLength());
+					if (requestMessage.equals("CALL_REQUEST") && !callInProgress) {
+						int response = JOptionPane.showConfirmDialog(null, "Incoming call. Accept?", "Incoming Call", JOptionPane.YES_NO_OPTION);
 						if (response == JOptionPane.NO_OPTION) {
-							return;
+							// Client did not accept the call
+
+							// Send a response to the caller
+							DatagramSocket responseSocket = new DatagramSocket();
+							InetAddress address = InetAddress.getByName(destIp);
+							int port = Integer.parseInt(voicePort);
+							byte[] responseBuffer = "CALL_REJECTED".getBytes();
+							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, port);
+							responseSocket.send(responsePacket);
+							responseSocket.close();
+							continue;
 						} else {
+							// Client accepted the call
 							callInProgress = true;
-							while (true) {
+							textArea.append("Call accepted." + newline);
+
+							// Send a response to the caller
+							DatagramSocket responseSocket = new DatagramSocket();
+							InetAddress address = InetAddress.getByName(destIp);
+							int port = Integer.parseInt(voicePort);
+							byte[] responseBuffer = "CALL_ACCEPTED".getBytes();
+							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, port);
+							responseSocket.send(responsePacket);
+							responseSocket.close();
+
+							while(callInProgress) {
 								DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 								audioSocket.receive(packet);
-								String senderIp = packet.getAddress().getHostAddress();
-								if (senderIp.equals(destIp)) {
+								if (packet.getAddress().getHostAddress().equals(destIp)) {
 									String message = new String(packet.getData(), 0, packet.getLength());
 									if (message.equals("CALL_END")) {
 										callInProgress = false;
-										textArea.append("Call ended" + newline);
+										speakers.close();
+										textArea.append("Call ended." + newline);
 										break;
 									}
 									speakers.write(packet.getData(), 0, packet.getLength());
@@ -168,14 +213,14 @@ public class App extends Frame implements WindowListener, ActionListener {
 	@Override
 	public void actionPerformed(ActionEvent e) {
 		// Check which button was clicked.
-		if (e.getSource() == sendButton){	
+		if (e.getSource() == sendButton){
 			// The "Send" button was clicked
 			String message = inputTextField.getText();
 			if (!message.trim().isEmpty()) {
 				try {
 					DatagramSocket textSocket = new DatagramSocket();
-					InetAddress address = InetAddress.getByName(destIp);
-					int port = Integer.parseInt(chatPort);
+					InetAddress address = InetAddress.getByName(destIp); // Replace with the target IP address
+					int port = Integer.parseInt(chatPort); // Replace with the target port number
 					byte[] buffer = message.getBytes();
 					DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, port);
 
@@ -183,7 +228,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 					textArea.append("Me: " + message + newline);
 					inputTextField.setText("");
 
-					// Send the message to the target
+					//Send the message to the target
 					textSocket.send(packet);
 					textSocket.close();
 				} catch (IOException ex) {
@@ -195,76 +240,141 @@ public class App extends Frame implements WindowListener, ActionListener {
 			if (callInProgress) {
 				// End the call
 				callInProgress = false;
-				microphone.close();
+				textArea.append("Call ended." + newline);
 				audioSocket.close();
-				textArea.append("Call ended" + newline);
+				microphone.close();
+				callButton.setText("Call");
 
-				// Send a call end message to the target
+				// Send a message to the other client to end the call
 				try {
-					DatagramSocket callEndSocket = new DatagramSocket();
+					DatagramSocket audioSocket = new DatagramSocket();
 					InetAddress address = InetAddress.getByName(destIp);
-					int callEndPort = Integer.parseInt(voicePort);
-					String callEndMessage = "CALL_END";
-					byte[] buffer = callEndMessage.getBytes();
-					DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, callEndPort);
-
-					callEndSocket.send(packet);
-					callEndSocket.close();
+					int port = Integer.parseInt(voicePort);
+					byte[] buffer = "CALL_END".getBytes();
+					DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, port);
+					audioSocket.send(packet);
+					audioSocket.close();
 				} catch (IOException ex) {
 					ex.printStackTrace();
 				}
 			} else {
-				// Send a call request to the target
+				// Send a call request to target
 				try {
-					DatagramSocket callRequestSocket = new DatagramSocket();
+					DatagramSocket audioSocket = new DatagramSocket();
 					InetAddress address = InetAddress.getByName(destIp);
-					int callRequestPort = Integer.parseInt(voicePort);
-					String callRequestMessage = "CALL_REQUEST";
-					byte[] buffer = callRequestMessage.getBytes();
-					DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, callRequestPort);
-
-					callRequestSocket.send(packet);
-					callRequestSocket.close();
+					int port = Integer.parseInt(voicePort);
+					byte[] buffer = "CALL_REQUEST".getBytes();
+					DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, port);
+					audioSocket.send(packet);
+					audioSocket.close();
 				} catch (IOException ex) {
 					ex.printStackTrace();
 				}
 
+				// Wait for a response from the target
 				try {
-					// Create a socket to send and receive audio data
-					audioSocket = new DatagramSocket();
-					InetAddress address = InetAddress.getByName(destIp);
-					int port = Integer.parseInt(voicePort);
+					DatagramSocket audioSocket = new DatagramSocket(Integer.parseInt(voicePort));
+					byte[] buffer = new byte[1024];
+					DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length);
+					audioSocket.receive(responsePacket);
+					String response = new String(responsePacket.getData(), 0, responsePacket.getLength());
+					if (response.equals("CALL_ACCEPTED")) {
+						// Target accepted the call
+						callInProgress = true;
+						textArea.append("Call accepted." + newline);
+						textArea.append("");
+						callButton.setText("End");
 
-					// Capture audio from the microphone
-					AudioFormat format = new AudioFormat(44100, 16, 2, true, true);
-					DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
-					microphone = (TargetDataLine) AudioSystem.getLine(info);
-					microphone.open(format);
-					microphone.start();
+						// Capture audio from the microphone
+						AudioFormat format = new AudioFormat(44100, 16, 2, true, true);
+						DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
+						microphone = (TargetDataLine) AudioSystem.getLine(info);
+						microphone.open(format);
+						microphone.start();
 
-					callInProgress = true;
-
-					// Create a thread to send audio data
-					new Thread(() -> {
-						byte[] buffer = new byte[1024];
-						try {
-							while (callInProgress) {
-								int bytesRead = microphone.read(buffer, 0, buffer.length);
-								DatagramPacket packet = new DatagramPacket(buffer, bytesRead, address, port);
-								audioSocket.send(packet);
+						// Create a thread to send audio data
+						new Thread(() -> {
+							byte[] audioBuffer = new byte[1024];
+							try {
+								while (callInProgress) {
+									int bytesRead = microphone.read(audioBuffer, 0, audioBuffer.length);
+									DatagramPacket packet = new DatagramPacket(audioBuffer, bytesRead, responsePacket.getAddress(), responsePacket.getPort());
+									audioSocket.send(packet);
+								}
+							} catch (IOException ex) {
+								ex.printStackTrace();
+							} finally {
+								microphone.close();
+								audioSocket.close();
 							}
-						} catch (IOException ex) {
-							ex.printStackTrace();
-						} finally {
-							microphone.close();
-							audioSocket.close();
-						}
-					}).start();
-				} catch (LineUnavailableException | IOException ex) {
+						}).start();
+					} else {
+						// Target rejected the call
+						textArea.append("Call rejected." + newline);
+						textArea.append("");
+					}
+					audioSocket.close();
+				} catch (IOException | LineUnavailableException ex) {
 					ex.printStackTrace();
 				}
 			}
+
+			try {
+				// Create a socket to send and receive audio data
+				DatagramSocket audioSocket = new DatagramSocket();
+				InetAddress address = InetAddress.getByName(destIp);
+				int port = Integer.parseInt(voicePort);
+
+				// Capture audio from the microphone
+				AudioFormat format = new AudioFormat(44100, 16, 2, true, true);
+				DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
+				TargetDataLine microphone = (TargetDataLine) AudioSystem.getLine(info);
+				microphone.open(format);
+				microphone.start();
+
+				// Create a thread to send audio data
+				new Thread(() -> {
+					byte[] buffer = new byte[1024];
+					while (true) {
+						int bytesRead = microphone.read(buffer, 0, buffer.length);
+						DatagramPacket packet = new DatagramPacket(buffer, bytesRead, address, port);
+						try {
+							audioSocket.send(packet);
+						} catch (IOException ex) {
+							ex.printStackTrace();
+						}
+					}
+				}).start();
+			} catch (LineUnavailableException | UnknownHostException | SocketException ex) {
+				ex.printStackTrace();
+			}
 		}
+	}
+
+	// Method to encrypt messages
+	public static String encrypt(String message) {
+		try {
+			Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+			cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+			byte[] encrypted = cipher.doFinal(message.getBytes("UTF-8"));
+			return Base64.getEncoder().encodeToString(encrypted);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+
+	// Method to decrypt messages
+	public static String decrypt(String message) {
+		try {
+			Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+			cipher.init(Cipher.DECRYPT_MODE, secretKey);
+			byte[] decrypted = cipher.doFinal(Base64.getDecoder().decode(message));
+			return new String(decrypted, "UTF-8");
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return null;
 	}
 
 	// These methods have to do with the GUI. You can use them if you wish to define what the program should do in specific scenarios
