@@ -42,6 +42,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 	public static String destIp;
 	public static String chatPort;
 	public static String voicePort;
+	public static String requestsPort;
 	private static TargetDataLine microphone;
 	private static SourceDataLine audioSocket;
 	private static SecretKey secretKey;
@@ -118,8 +119,9 @@ public class App extends Frame implements WindowListener, ActionListener {
 
 		// Ask the user for the destination IP address and port number
 		destIp = JOptionPane.showInputDialog(null, "Enter the IP address to send messages to:", "Destination IP", JOptionPane.QUESTION_MESSAGE);
-		chatPort = "12345";  // Replace with the target port number
-		voicePort = "12346"; // Replace with the target port number
+		chatPort = "12345"; 	// Replace with the target port number
+		voicePort = "12346"; 	// Replace with the target port number
+		requestsPort = "12347"; // Replace with the target port number
 
 		// Shows the message destination IP address
 		textArea.append("Sending to " + destIp + newline);
@@ -145,7 +147,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 		
 		// Create a thread to listen for call requests
 		new Thread(() -> {
-			try (DatagramSocket callSocket = new DatagramSocket(Integer.parseInt(voicePort))) {
+			try (DatagramSocket callSocket = new DatagramSocket(Integer.parseInt(requestsPort))) {
 				byte[] buffer = new byte[1024];
 				while (true) {
 					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
@@ -159,7 +161,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 							// Send call accepted message
 							String callAccepted = "CALL_ACCEPTED";
 							byte[] responseBuffer = callAccepted.getBytes();
-							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, Integer.parseInt(voicePort));
+							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, Integer.parseInt(requestsPort));
 							callSocket.send(responsePacket);
 
 							// Start receiving audio data
@@ -172,7 +174,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 							// Send call rejected message
 							String callRejected = "CALL_REJECTED";
 							byte[] responseBuffer = callRejected.getBytes();
-							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, Integer.parseInt(voicePort));
+							DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length, address, Integer.parseInt(requestsPort));
 							callSocket.send(responsePacket);
 							textArea.append("Call rejected" + newline);
 						}
@@ -235,7 +237,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 						InetAddress address = InetAddress.getByName(destIp);
 						String callRequest = "CALL_REQUEST";
 						byte[] requestBuffer = callRequest.getBytes();
-						DatagramPacket requestPacket = new DatagramPacket(requestBuffer, requestBuffer.length, address, Integer.parseInt(voicePort));
+						DatagramPacket requestPacket = new DatagramPacket(requestBuffer, requestBuffer.length, address, Integer.parseInt(requestsPort));
 						requestSocket.send(requestPacket);
 	
 						// Wait for call response
