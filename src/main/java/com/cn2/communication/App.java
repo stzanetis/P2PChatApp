@@ -14,6 +14,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.lang.Thread;
 
+// For audio communication
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.DataLine;
@@ -21,13 +22,13 @@ import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.SourceDataLine;
 import javax.sound.sampled.TargetDataLine;
 
+// For encryption and decryption
 import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import java.util.Base64;
 
 public class App extends Frame implements WindowListener, ActionListener {
-
 	// Definition of the app's fields
 	static TextField inputTextField;		
 	static JTextArea textArea;				 
@@ -47,13 +48,14 @@ public class App extends Frame implements WindowListener, ActionListener {
 	private static SourceDataLine audioSocket;
 	private static SecretKey secretKey;
 	private static boolean callInProgress = false;
+	private static DatagramSocket voiceSenderSocket;
+	private static DatagramSocket voiceReceiverSocket;
 
 	// Intialize the secret key for encryption and decryption
 	static {
 		try {
-			KeyGenerator keyGen = KeyGenerator.getInstance("AES");
-			keyGen.init(128);
-			secretKey = keyGen.generateKey();
+			byte[] keyBytes = "abcdefghigklmnop".getBytes();
+			secretKey = new SecretKeySpec(keyBytes, "AES");
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -136,18 +138,13 @@ public class App extends Frame implements WindowListener, ActionListener {
 					textSocket.receive(packet);
 					if (packet.getAddress().getHostAddress().equals(destIp)) {
 						String message = new String(packet.getData(), 0, packet.getLength());
-						String decryptedMessage = decrypt(message);
-						textArea.append("Received: " + decryptedMessage + newline);
+						textArea.append("Received: " + decryptMessage(message) + newline);
 					}
 				}
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		}).start();
-
-		
-		// Create a thread to listen for call requests
-		startAudioReception();
 	}
 	
 	// The method that corresponds to the Action Listener. Whenever an action is performed
@@ -160,11 +157,10 @@ public class App extends Frame implements WindowListener, ActionListener {
 			String message = inputTextField.getText();
 			if (!message.trim().isEmpty()) {
 				try {
-					String encryptedMessage = encrypt(message);
 					DatagramSocket textSocket = new DatagramSocket();
 					InetAddress address = InetAddress.getByName(destIp); // Replace with the target IP address
-					int port = Integer.parseInt(chatPort); // Replace with the target port number
-					byte[] buffer = encryptedMessage.getBytes();
+					int port = Integer.parseInt(chatPort) + 1; // Replace with the target port number
+					byte[] buffer = encryptMessage(message).getBytes();
 					DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, port);
 
 					// Print the message locally
@@ -180,35 +176,49 @@ public class App extends Frame implements WindowListener, ActionListener {
 			}
 		} else if (e.getSource() == callButton) {
 			// The "Call" button was clicked
-			startAudioCommunication();
+			if (callInProgress) {
+				callInProgress = false;
+				if (voiceSenderSocket != null && !voiceSenderSocket.isClosed()) {
+					voiceSenderSocket.close();
+				}
+				if (voiceReceiverSocket != null && !voiceReceiverSocket.isClosed()) {
+					voiceReceiverSocket.close();
+				}
+				callButton.setText("Call");
+			} else {
+				startAudioCommunication();
+				startAudioReception();
+				callInProgress = true;
+				callButton.setText("End");
+			}
 		}
 	}
 
 	// Method to encrypt messages
-	public static String encrypt(String message) {
+	private static String encryptMessage(String message) {
 		try {
-			Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+			Cipher cipher = Cipher.getInstance("AES");
 			cipher.init(Cipher.ENCRYPT_MODE, secretKey);
-			byte[] encrypted = cipher.doFinal(message.getBytes("UTF-8"));
+			byte[] encrypted = cipher.doFinal(message.getBytes());
 			return Base64.getEncoder().encodeToString(encrypted);
 		} catch (Exception e) {
 			e.printStackTrace();
+			return null;
 		}
-		return null;
 	}
 
 	// Method to decrypt messages
-	public static String decrypt(String encryptedMessage) {
+	private static String decryptMessage(String message) {
 		try {
-			Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+			Cipher cipher = Cipher.getInstance("AES");
 			cipher.init(Cipher.DECRYPT_MODE, secretKey);
-			byte[] decodedMessage = Base64.getDecoder().decode(encryptedMessage);
-			byte[] decrypted = cipher.doFinal(decodedMessage);
-			return new String(decrypted, "UTF-8");
+			byte[] decrypted = cipher.doFinal(Base64.getDecoder().decode(message));
+			return new String(decrypted);
 		} catch (Exception e) {
 			e.printStackTrace();
+			System.out.println("Error Decrypting");
+			return null;
 		}
-		return null;
 	}
 
 	// Method to start sending audio data
@@ -223,13 +233,13 @@ public class App extends Frame implements WindowListener, ActionListener {
 				microphone.start();
 
 				byte[] buffer = new byte[4096];
-				DatagramSocket voiceSocket = new DatagramSocket();
+				voiceSenderSocket = new DatagramSocket();
 				InetAddress address = InetAddress.getByName(destIp);
 
 				while (true) {
 					int bytesRead = microphone.read(buffer, 0, buffer.length);
 					DatagramPacket packet = new DatagramPacket(buffer, bytesRead, address, Integer.parseInt(voicePort));
-					voiceSocket.send(packet);
+					voiceSenderSocket.send(packet);
 				}
 			} catch (IOException | LineUnavailableException ex) {
 				ex.printStackTrace();
@@ -248,12 +258,12 @@ public class App extends Frame implements WindowListener, ActionListener {
 				audioSocket.open(format);
 				audioSocket.start();
 
-				DatagramSocket voiceSocket = new DatagramSocket(Integer.parseInt(voicePort));
+				voiceReceiverSocket = new DatagramSocket(Integer.parseInt(voicePort));
 				byte[] buffer = new byte[4096];
 
 				while (true) {
 					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-					voiceSocket.receive(packet);
+					voiceReceiverSocket.receive(packet);
 					audioSocket.write(packet.getData(), 0, packet.getLength());
 				}
 			} catch (IOException | LineUnavailableException ex) {
