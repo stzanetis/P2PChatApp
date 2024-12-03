@@ -45,7 +45,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 	public static String voicePort;
 	public static String requestsPort;
 	private static TargetDataLine microphone;
-	private static SourceDataLine audioSocket;
+	private static SourceDataLine speaker;
 	private static SecretKey secretKey;
 	private static boolean callInProgress = false;
 	private static DatagramSocket voiceSenderSocket;
@@ -139,6 +139,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 					if (packet.getAddress().getHostAddress().equals(destIp)) {
 						String message = new String(packet.getData(), 0, packet.getLength());
 						textArea.append("Received: " + decryptMessage(message) + newline);
+						System.out.println("Message received");
 					}
 				}
 			} catch (IOException e) {
@@ -170,6 +171,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 					//Send the message to the target
 					textSocket.send(packet);
 					textSocket.close();
+					System.out.println("Message sent");
 				} catch (IOException ex) {
 					ex.printStackTrace();
 				}
@@ -200,6 +202,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 			Cipher cipher = Cipher.getInstance("AES");
 			cipher.init(Cipher.ENCRYPT_MODE, secretKey);
 			byte[] encrypted = cipher.doFinal(message.getBytes());
+			System.out.println("Encrypted message: " + Base64.getEncoder().encodeToString(encrypted));
 			return Base64.getEncoder().encodeToString(encrypted);
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -213,6 +216,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 			Cipher cipher = Cipher.getInstance("AES");
 			cipher.init(Cipher.DECRYPT_MODE, secretKey);
 			byte[] decrypted = cipher.doFinal(Base64.getDecoder().decode(message));
+			System.out.println("Decrypted message: " + new String(decrypted));
 			return new String(decrypted);
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -232,17 +236,24 @@ public class App extends Frame implements WindowListener, ActionListener {
 				microphone.open(format);
 				microphone.start();
 
-				byte[] buffer = new byte[4096];
+				byte[] buffer = new byte[1024];
 				voiceSenderSocket = new DatagramSocket();
 				InetAddress address = InetAddress.getByName(destIp);
 
-				while (true) {
+				while (callInProgress) {
 					int bytesRead = microphone.read(buffer, 0, buffer.length);
 					DatagramPacket packet = new DatagramPacket(buffer, bytesRead, address, Integer.parseInt(voicePort));
 					voiceSenderSocket.send(packet);
 				}
 			} catch (IOException | LineUnavailableException ex) {
 				ex.printStackTrace();
+			} finally {
+				if (voiceSenderSocket != null && !voiceSenderSocket.isClosed()) {
+					voiceSenderSocket.close();
+				}
+				if (microphone != null && microphone.isOpen()) {
+					microphone.close();
+				}
 			}
 		}).start();
 	}
@@ -254,20 +265,27 @@ public class App extends Frame implements WindowListener, ActionListener {
 				// Start receiving and playing audio data
 				AudioFormat format = new AudioFormat(44100, 16, 2, true, true);
 				DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
-				audioSocket = (SourceDataLine) AudioSystem.getLine(info);
-				audioSocket.open(format);
-				audioSocket.start();
+				speaker = (SourceDataLine) AudioSystem.getLine(info);
+				speaker.open(format);
+				speaker.start();
 
 				voiceReceiverSocket = new DatagramSocket(Integer.parseInt(voicePort));
-				byte[] buffer = new byte[4096];
+				byte[] buffer = new byte[1024];
 
-				while (true) {
+				while (callInProgress) {
 					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 					voiceReceiverSocket.receive(packet);
-					audioSocket.write(packet.getData(), 0, packet.getLength());
+					speaker.write(packet.getData(), 0, packet.getLength());
 				}
 			} catch (IOException | LineUnavailableException ex) {
 				ex.printStackTrace();
+			} finally {
+				if (voiceReceiverSocket != null && !voiceReceiverSocket.isClosed()) {
+					voiceReceiverSocket.close();
+				}
+				if (speaker != null && speaker.isOpen()) {
+					speaker.close();
+				}
 			}
 		}).start();
 	}
