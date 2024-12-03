@@ -139,7 +139,6 @@ public class App extends Frame implements WindowListener, ActionListener {
 					if (packet.getAddress().getHostAddress().equals(destIp)) {
 						String message = new String(packet.getData(), 0, packet.getLength());
 						textArea.append("Received: " + decryptMessage(message) + newline);
-						System.out.println("Message received");
 					}
 				}
 			} catch (IOException e) {
@@ -210,7 +209,6 @@ public class App extends Frame implements WindowListener, ActionListener {
 			Cipher cipher = Cipher.getInstance("AES");
 			cipher.init(Cipher.ENCRYPT_MODE, secretKey);
 			byte[] encrypted = cipher.doFinal(message.getBytes());
-			System.out.println("Encrypted message: " + Base64.getEncoder().encodeToString(encrypted));
 			return Base64.getEncoder().encodeToString(encrypted);
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -224,7 +222,6 @@ public class App extends Frame implements WindowListener, ActionListener {
 			Cipher cipher = Cipher.getInstance("AES");
 			cipher.init(Cipher.DECRYPT_MODE, secretKey);
 			byte[] decrypted = cipher.doFinal(Base64.getDecoder().decode(message));
-			System.out.println("Decrypted message: " + new String(decrypted));
 			return new String(decrypted);
 		} catch (Exception e) {
 			e.printStackTrace();
