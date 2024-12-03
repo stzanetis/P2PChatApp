@@ -146,6 +146,23 @@ public class App extends Frame implements WindowListener, ActionListener {
 				e.printStackTrace();
 			}
 		}).start();
+
+		// Create a thread to receive call messages
+		new Thread(() -> {
+			byte[] buffer = new byte[1024];
+			try (DatagramSocket requestsSocket = new DatagramSocket(Integer.parseInt(requestsPort))) {
+				while (true) {
+					DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+					requestsSocket.receive(packet);
+					if (packet.getAddress().getHostAddress().equals(destIp)) {
+						String message = new String(packet.getData(), 0, packet.getLength());
+						handleCallMessages(message);
+					}
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}).start();
 	}
 	
 	// The method that corresponds to the Action Listener. Whenever an action is performed
@@ -179,19 +196,10 @@ public class App extends Frame implements WindowListener, ActionListener {
 		} else if (e.getSource() == callButton) {
 			// The "Call" button was clicked
 			if (callInProgress) {
-				callInProgress = false;
-				if (voiceSenderSocket != null && !voiceSenderSocket.isClosed()) {
-					voiceSenderSocket.close();
-				}
-				if (voiceReceiverSocket != null && !voiceReceiverSocket.isClosed()) {
-					voiceReceiverSocket.close();
-				}
-				callButton.setText("Call");
+				sendCallMessages("CALL_END");
+				endCall();
 			} else {
-				startAudioCommunication();
-				startAudioReception();
-				callInProgress = true;
-				callButton.setText("End");
+				sendCallMessages("CALL_REQUEST");
 			}
 		}
 	}
@@ -223,6 +231,70 @@ public class App extends Frame implements WindowListener, ActionListener {
 			System.out.println("Error Decrypting");
 			return null;
 		}
+	}
+
+	// Method to handle call messages
+	private static void handleCallMessages(String message) {
+		switch(message) {
+			case "CALL_REQUEST":
+				int response = JOptionPane.showConfirmDialog(null, "Do you want to accept the call?", "Incoming call", JOptionPane.YES_NO_OPTION);
+				if (response == JOptionPane.YES_OPTION) {
+					sendCallMessages("CALL_ACCEPTED");
+					startAudioCommunication();
+					startAudioReception();
+					callInProgress = true;
+					callButton.setText("End");
+				} else
+					sendCallMessages("CALL_REJECTED");
+				break;
+			case "CALL_ACCEPTED":
+				startAudioCommunication();
+				startAudioReception();
+				callInProgress = true;
+				callButton.setText("End");
+				break;
+			case "CALL_REJECTED":
+				textArea.append("Call rejected by the recipient" + newline);
+				break;
+			case "CALL_END":
+				endCall();
+				textArea.append("Call ended by the other user" + newline);
+				break;
+			default:
+				break;
+		}
+	}
+
+	// Method to send call messages
+	private static void sendCallMessages(String message) {
+		try {
+			DatagramSocket socket = new DatagramSocket();
+			InetAddress address = InetAddress.getByName(destIp);
+			byte[] buffer = message.getBytes();
+			DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, Integer.parseInt(requestsPort));
+			socket.send(packet);
+			socket.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	// Method to end the call
+	private static void endCall() {
+		callInProgress = false;
+		if (voiceSenderSocket != null && !voiceSenderSocket.isClosed()) {
+			voiceSenderSocket.close();
+		}
+		if (voiceReceiverSocket != null && !voiceReceiverSocket.isClosed()) {
+			voiceReceiverSocket.close();
+		}
+		if (microphone != null && microphone.isOpen()) {
+			microphone.close();
+		}
+		if (speaker != null && speaker.isOpen()) {
+			speaker.close();
+		}
+		callButton.setText("Call");
 	}
 
 	// Method to start sending audio data
