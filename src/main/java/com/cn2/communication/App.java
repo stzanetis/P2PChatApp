@@ -160,7 +160,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 				try {
 					DatagramSocket textSocket = new DatagramSocket();
 					InetAddress address = InetAddress.getByName(destIp); // Replace with the target IP address
-					int port = Integer.parseInt(chatPort) + 1; // Replace with the target port number
+					int port = Integer.parseInt(chatPort); // Replace with the target port number
 					byte[] buffer = encryptMessage(message).getBytes();
 					DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, port);
 
