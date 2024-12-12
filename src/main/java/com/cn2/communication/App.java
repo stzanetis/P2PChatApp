@@ -101,7 +101,7 @@ public class App extends Frame implements WindowListener, ActionListener {
 		sendButton.addActionListener(this);
 		callButton.addActionListener(this);
 
-		// 4. Addint a KeyListener to the TextField to send the message when the Enter key is pressed
+		// 4. Add a KeyListener to the TextField to send the message when the Enter key is pressed
 		inputTextField.addKeyListener(new KeyAdapter() {
 			@Override
 			public void keyPressed(KeyEvent e) {
@@ -187,7 +187,6 @@ public class App extends Frame implements WindowListener, ActionListener {
 					//Send the message to the target
 					textSocket.send(packet);
 					textSocket.close();
-					System.out.println("Message sent");
 				} catch (IOException ex) {
 					ex.printStackTrace();
 				}
