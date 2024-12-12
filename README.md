@@ -14,10 +14,10 @@ Please consider installing and using the following applications and tools for th
 
 - Git: [link](https://git-scm.com/downloads)
 - Java 23 (although it is expected to work with any version from 1.8 and beyond): [link](https://www.oracle.com/java/technologies/downloads/)
+- Apache Maven
 
 
 ## Useful Material
 
 - The original description of the assignment can be found [here](https://sites.google.com/view/computer-networks-ii/%CE%B5%CF%81%CE%B3%CE%B1%CF%83%CE%AF%CE%B5%CF%82)
-- Additional content for the assignement will be uploaded [here](https://sites.google.com/view/computer-networks-ii)
 - The original template repository is located [here](https://github.com/siavvasm/CN2_AUTH_ChatAndVoIP)
